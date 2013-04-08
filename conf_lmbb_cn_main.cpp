@@ -21,6 +21,7 @@ char *g_strHelp =
 
 inline int GetCNSliceNum(const CDataGraph &p_CN);
 bool ZigCNLbeAlign(CDataGraph &p_CN, CSet &p_LbeContent);//用于对cn中的弧（DATA_NODE）进行标注，将标注信息记录在每个slice的开始节点（虚节点）的hook中
+int CalcDuration(int d);
 int main(int p_nArgc, char **p_ppcArgv)
 {
 	if (p_nArgc < 3)
@@ -222,14 +223,23 @@ int main(int p_nArgc, char **p_ppcArgv)
 			OneDimKMeanClassfy(pfPosterior, LearnCNGraph.m_nNodesNum, ClassNum, pClassCentre, pnDiscreteConf);
 			for (int nNode = 0; nNode < LearnCNGraph.m_nExitNode; ++nNode)
 			{
+				int duration;
 				for (int nChild = 0; nChild < LearnCNGraph.m_pdnodeArray[nNode].nChildrenNum; ++nChild)
 				{
+					//这里把离散化后的字的duration征添加到原有的两个特征后面，只在lmbb.conf里面添加
+					//duration特征有0,1,2,3四种,分别对应0-10,10-20,20-30,30+
+					//这样之后的特征种类就是74*4=296
 					if(LearnCNGraph.m_pdnodeArray[LearnCNGraph.m_pdnodeArray[nNode].pnChildren[nChild]].nNodeContentId == SIL)
 						continue;//跳过删除符
 					fprintf(fpConf, "%d\t", pnDiscreteConf[LearnCNGraph.m_pdnodeArray[nNode].pnChildren[nChild]]);
 					fprintf(fpLmbb, "%d\t", LearnCNGraph.m_pdnodeArray[LearnCNGraph.m_pdnodeArray[nNode].pnChildren[nChild]].pnStateSeg[0]);
-					fprintf(fpConfLmbb, "%d%d\t", pnDiscreteConf[LearnCNGraph.m_pdnodeArray[nNode].pnChildren[nChild]]
-					, LearnCNGraph.m_pdnodeArray[LearnCNGraph.m_pdnodeArray[nNode].pnChildren[nChild]].pnStateSeg[0]);
+					//离散化duration
+					duration = LearnCNGraph.m_pdnodeArray[LearnCNGraph.m_pdnodeArray[nNode].pnChildren[nChild]].nEndTime - \
+					LearnCNGraph.m_pdnodeArray[LearnCNGraph.m_pdnodeArray[nNode].pnChildren[nChild]].nBeginTime;
+					duration = CalcDuration(duration);
+					fprintf(fpConfLmbb, "%d%d%d\t", pnDiscreteConf[LearnCNGraph.m_pdnodeArray[nNode].pnChildren[nChild]]
+					, LearnCNGraph.m_pdnodeArray[LearnCNGraph.m_pdnodeArray[nNode].pnChildren[nChild]].pnStateSeg[0]
+					, duration);
 				}
 				int nLbe = (int)(LearnCNGraph.m_pdnodeArray[nNode].hook);
 				if(nLbe == -1)
@@ -242,8 +252,14 @@ int main(int p_nArgc, char **p_ppcArgv)
 				{
 					fprintf(fpConf, "%d\n", pnDiscreteConf[LearnCNGraph.m_pdnodeArray[nNode].pnChildren[nLbe]]);
 					fprintf(fpLmbb, "%d\n", LearnCNGraph.m_pdnodeArray[LearnCNGraph.m_pdnodeArray[nNode].pnChildren[nLbe]].pnStateSeg[0]);
-					fprintf(fpConfLmbb, "%d%d\n", pnDiscreteConf[LearnCNGraph.m_pdnodeArray[nNode].pnChildren[nLbe]],
-						LearnCNGraph.m_pdnodeArray[LearnCNGraph.m_pdnodeArray[nNode].pnChildren[nLbe]].pnStateSeg[0]);
+
+					//离散化duration
+					duration = LearnCNGraph.m_pdnodeArray[LearnCNGraph.m_pdnodeArray[nNode].pnChildren[nLbe]].nEndTime - \
+					LearnCNGraph.m_pdnodeArray[LearnCNGraph.m_pdnodeArray[nNode].pnChildren[nLbe]].nBeginTime;
+					duration = CalcDuration(duration);
+					fprintf(fpConfLmbb, "%d%d%d\n", pnDiscreteConf[LearnCNGraph.m_pdnodeArray[nNode].pnChildren[nLbe]]
+					, LearnCNGraph.m_pdnodeArray[LearnCNGraph.m_pdnodeArray[nNode].pnChildren[nLbe]].pnStateSeg[0]
+					, duration);
 				}
 			}
 			fprintf(fpConf, "\n");
@@ -393,4 +409,16 @@ bool ZigCNLbeAlign(CDataGraph &p_CN, CSet &p_LbeContent)
 	delete []pchPathRecord;
 	delete []pnDistArray;
 	return true;
+}
+
+int CalcDuration(int d){
+//把duration分成4类
+	if (d<11)
+		return 0;
+	else if (d<21)
+		return 1;
+	else if (d<31)
+		return 2;
+	else
+		return 3;
 }
